@@ -1,0 +1,482 @@
+OBJECT Codeunit 99008901 POS EFT Utility (Demo)										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=07/05/14;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+Text003@1015 : TextConst 'ENU=Offline card authorisation;ESP=Autorizaci¢n Tarjeta Offline';										
+Text004@1016 : TextConst 'ENU=Voiding Card Payment\\;ESP=Anulando Pago con Tarjeta\\';										
+Text005@1017 : TextConst 'ENU=Amount #1###########\\;ESP=Importe #1###########\\';										
+Text006@1018 : TextConst 'ENU=Card void error!\Unsupported transaction type;ESP=Error Anulaci¢n Tarjeta\Tipo Transacci¢n no soport	ada	';								
+Text007@1019 : TextConst 'ENU=Card void error!\;ESP=­Error Anulaci¢n Tarjeta!\';										
+Text008@1020 : TextConst 'ENU=Authorised (DEMO);ESP=Autorizado (DEMO)';										
+Text009@1021 : TextConst 'ENU=TEST CARD;ESP=TEST CARD';										
+Text010@1022 : TextConst 'ENU=DEMO;ESP=DEMO';										
+POSGUI@1100409002 : Codeunit 99001575;										
+PosSetup@1000 : Record 99008900;										
+CardEntry@1001 : Record 99008987;										
+PosTerminal@1002 : Record 99001471;										
+Globals@1003 : Codeunit 99008919;										
+ReadFromMSR@1004 : Boolean;										
+EFTTrack2@1005 : Text[100];										
+EFTExpiryDate@1006 : Text[4];										
+EFTCardNumber@1007 : Text[30];										
+EFTAmount@1008 : Decimal;										
+EFTAuthCode@1009 : Code[10];										
+EFTResult@1010 : Integer;										
+EFTMessage@1011 : Text[50];										
+EFTCardType@1012 : Code[10];										
+EFTCardTypeName@1013 : Text[30];										
+EFTSlipNo@1014 : Code[20];										
+Text011@1200070000 : TextConst 'ENU=Rejected (DEMO);ESP=Rechazado (DEMO)';										
+Text012@1100409000 : TextConst 'ENU=Warning!!! - This is a demo setup. Do you want to autorise this card entry?;ESP=­­­Atenci¢n!!!	-	Est	a	es	una conf. demostraci¢n. ¨Desea autorizar el mov. tarjeta?';					
+OPOS@1100409001 : Codeunit 99008910;										
+Text013@1200070001 : TextConst 'ENU=Accepted (DEMO);ESP=Aceptado (DEMO)';										
+CurrTenderType@10012001 : Code[10];										
+CurrLineNo@10012000 : Integer;										
+										
+PROCEDURE InitEFTServer@27();										
+BEGIN										
+//InitEFTServer										
+PosSetup.GET(Globals.HardwareProfileID);										
+PosTerminal.GET(Globals.TerminalNo);										
+END;										
+										
+PROCEDURE ClearEFT@31();										
+BEGIN										
+//ClearEFT										
+CLEAR(CardEntry);										
+EFTTrack2 := '';										
+EFTExpiryDate := '';										
+EFTCardNumber := '';										
+EFTAmount := 0;										
+EFTAuthCode := '';										
+EFTResult := 0;										
+EFTMessage := '';										
+EFTCardType := '';										
+EFTCardTypeName := '';										
+ReadFromMSR := FALSE;										
+CurrTenderType := '';										
+CurrLineNo := 0;										
+END;										
+										
+PROCEDURE SetTransType@33(TransType@1000 : Integer);										
+BEGIN										
+"CardEntry.""Transaction Type"" := TransType;"										
+END;										
+										
+PROCEDURE SetTrack2@30(Track2@1000 : Text[100]);										
+VAR										
+Pos@1001 : Integer;										
+BEGIN										
+//SetTrack2										
+"Pos := STRPOS(Track2,'=');"										
+IF Pos = 0 THEN BEGIN										
+"Pos := STRPOS(Track2,'-');"										
+END;										
+IF Pos <> 0 THEN BEGIN										
+"EFTCardNumber := COPYSTR(Track2,1,Pos-1);"										
+"EFTExpiryDate := COPYSTR(Track2,Pos+1,4);"										
+END										
+ELSE BEGIN										
+EFTCardNumber := Track2;										
+EFTExpiryDate := '';										
+END;										
+EFTTrack2 := ';' + Track2 + '?';										
+END;										
+										
+PROCEDURE SetCardNo@32(CardNo@1000 : Text[40]);										
+BEGIN										
+EFTCardNumber := CardNo;										
+END;										
+										
+PROCEDURE SetAmount@34(CardAmount@1000 : Decimal);										
+BEGIN										
+"EFTAmount := ROUND(CardAmount,0.01);"										
+END;										
+										
+PROCEDURE SetVAT@3(CardVAT@1000 : Decimal);										
+BEGIN										
+END;										
+										
+PROCEDURE SetCashback@4(CardCashback@1000 : Decimal);										
+BEGIN										
+END;										
+										
+PROCEDURE SetComboCard@18(Credit@1000 : Boolean);										
+BEGIN										
+END;										
+										
+PROCEDURE SetSlipNo@9(SlipNo@1000 : Code[20]);										
+BEGIN										
+EFTSlipNo := SlipNo;										
+"CardEntry.""Receipt No."" := SlipNo;"										
+END;										
+										
+PROCEDURE SetAuthCode@35(AuthCode@1000 : Code[10]);										
+BEGIN										
+EFTAuthCode := AuthCode;										
+END;										
+										
+PROCEDURE SetPassword@39(Password@1000 : Code[10]);										
+BEGIN										
+END;										
+										
+PROCEDURE SetVoidTrans@36(TransNo@1000 : Code[10];BatchNo@1001 : Code[10]);										
+BEGIN										
+END;										
+										
+PROCEDURE SetServer@21(Server@1000 : Text[30]);										
+BEGIN										
+END;										
+										
+PROCEDURE SeekAuth@37();										
+BEGIN										
+//SeekAuth										
+EFTResult := 0;										
+END;										
+										
+PROCEDURE TestCard@11();										
+BEGIN										
+//TestCard										
+SetTransType(-1);										
+SeekAuth;										
+END;										
+										
+PROCEDURE PollStatus@38(VAR PollStatusTxt@1000 : Text[50]) : Boolean;										
+BEGIN										
+//PollStatus										
+"CASE CardEntry.""Transaction Type"" OF"										
+"CardEntry.""Transaction Type""::Sale,"										
+"CardEntry.""Transaction Type""::Refund,"										
+"CardEntry.""Transaction Type""::Offline,"										
+"CardEntry.""Transaction Type""::""Void Sale"","										
+"CardEntry.""Transaction Type""::""Void Refund"","										
+"CardEntry.""Transaction Type""::""Void Offline"":"										
+BEGIN										
+DummyRequest;										
+END;										
+-1:										
+BEGIN										
+TestRequest;										
+END;										
+END;										
+PollStatusTxt := EFTMessage;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE SetExpiryDate@1(ExDate@1000 : Text[5]);										
+BEGIN										
+EFTExpiryDate := ExDate;										
+END;										
+										
+PROCEDURE GetCardNumber@10() : Code[50];										
+BEGIN										
+EXIT(EFTCardNumber);										
+END;										
+										
+PROCEDURE GetExpiryDate@13() : Text[5];										
+BEGIN										
+EXIT(EFTExpiryDate);										
+END;										
+										
+PROCEDURE GetCardTypeName@15() : Text[30];										
+BEGIN										
+EXIT(EFTCardTypeName);										
+END;										
+										
+PROCEDURE GetCardType@8() : Code[10];										
+BEGIN										
+EXIT(EFTCardType);										
+END;										
+										
+PROCEDURE GetResult@5() : Integer;										
+BEGIN										
+EXIT(EFTResult);										
+END;										
+										
+PROCEDURE IsComboCard@14() : Boolean;										
+BEGIN										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE IsPollable@22() : Boolean;										
+BEGIN										
+"EXIT(CardEntry.""Transaction Type"" = -1);"										
+END;										
+										
+PROCEDURE IsPasswordRequired@28(MgrKey@1000 : Boolean) : Boolean;										
+BEGIN										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE IsExpiryDateRequired@26() : Boolean;										
+BEGIN										
+EXIT(NOT ReadFromMSR);										
+END;										
+										
+PROCEDURE IsVoidMSRRequired@40() : Boolean;										
+BEGIN										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE InsertLogEntry@25() : Integer;										
+BEGIN										
+//InsertLogEntry										
+										
+"CardEntry.""Auth.code"" := EFTAuthCode;"										
+CardEntry.Message := EFTMessage;										
+IF ReadFromMSR THEN										
+"CardEntry.""Auth. Source Code"" := 'D'"										
+ELSE										
+"CardEntry.""Auth. Source Code"" := 'T';"										
+"CardEntry.""Res.code"" := '00';"										
+"CardEntry.""Tender Type"" := CurrTenderType;"										
+"CardEntry.""EFT Merchant No."" := 'DEMOMERCHANT';"										
+"CardEntry.""EFT Terminal ID""  := 'DEMOTRMNAL';"										
+"CardEntry.""EFT Batch No."" := 'DEMOBATCH';"										
+"CardEntry.""EFT Trans. No."" := NextDemoTransNo();"										
+"CardEntry.""EFT Trans. Time"" := FORMAT(TIME, 0, '<Hours24,2><Minute,2><Second,2>');"										
+"CardEntry.""EFT Trans. Date"" := FORMAT(TODAY, 0, '<Year4><Month,2><Day,2>');"										
+										
+IF EFTResult = 1 THEN										
+"CardEntry.""Authorisation Ok"" := TRUE;"										
+										
+CardEntry.MODIFY;										
+COMMIT;										
+"EXIT(CardEntry.""Entry No."");"										
+END;										
+										
+PROCEDURE NextEntryNo@23() : Integer;										
+VAR										
+TmpCardEntry@1000 : Record 99008987;										
+BEGIN										
+//NextEntryNo										
+"TmpCardEntry.SETRANGE(""Store No."",PosTerminal.""Store No."");"										
+"TmpCardEntry.SETRANGE(""POS Terminal No."",PosTerminal.""No."");"										
+IF TmpCardEntry.FIND('+') THEN										
+"EXIT(TmpCardEntry.""Entry No."" + 1)"										
+ELSE										
+EXIT(1);										
+END;										
+										
+PROCEDURE SetFromMSR@12(FromMSR@1000 : Boolean);										
+BEGIN										
+ReadFromMSR := FromMSR;										
+END;										
+										
+PROCEDURE SetTenderType@6(Code@1000 : Code[10]);										
+BEGIN										
+CurrTenderType := Code;										
+END;										
+										
+PROCEDURE GetRefMsg@2() : Text[50];										
+BEGIN										
+EXIT(Text003);										
+END;										
+										
+PROCEDURE TestVoidCardEntry@7(OrgCardEntry@1000 : Record 99008987) : Boolean;										
+BEGIN										
+//TestVoidCardEntry										
+"IF NOT OrgCardEntry.""Authorisation Ok"" THEN"										
+EXIT(FALSE);										
+//IF OrgCardEntry.Voided THEN  //LS7.1-01										
+//  EXIT(FALSE);               //LS7.1-01										
+"IF (OrgCardEntry.""Transaction Type"" = OrgCardEntry.""Transaction Type""::""Void Sale"") OR"										
+"(OrgCardEntry.""Transaction Type"" = OrgCardEntry.""Transaction Type""::""Void Refund"") OR"										
+"(OrgCardEntry.""Transaction Type"" = OrgCardEntry.""Transaction Type""::""Void Offline"") THEN"										
+EXIT(FALSE);										
+"IF OrgCardEntry.""Store No."" <> PosTerminal.""Store No."" THEN"										
+EXIT(FALSE);										
+"IF OrgCardEntry.""POS Terminal No."" <> PosTerminal.""No."" THEN"										
+EXIT(FALSE);										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE VoidCardEntry@16(OrgCardEntry@1000 : Record 99008987;SlipNo@1001 : Code[20];Track2@1002 : Text[100]) : Integer;										
+VAR										
+Window@1003 : Dialog;										
+MsgTxt@1004 : Text[50];										
+BEGIN										
+//VoidCardEntry										
+IF GUIALLOWED THEN										
+BEGIN										
+{ //LS7.1-01 -										
+Window.OPEN(Text004 +										
+Text005 +										
+'#2############################');										
+"Window.UPDATE(1,OrgCardEntry.Amount);"										
+} //LS7.1-01 +										
+Window.OPEN(Text004); //LS7.1-01										
+END;										
+ClearEFT;										
+"CASE OrgCardEntry.""Transaction Type"" OF"										
+"OrgCardEntry.""Transaction Type""::Sale:"										
+"SetTransType(CardEntry.""Transaction Type""::""Void Sale"");"										
+"OrgCardEntry.""Transaction Type""::Refund:"										
+"SetTransType(CardEntry.""Transaction Type""::""Void Refund"");"										
+"OrgCardEntry.""Transaction Type""::Offline:"										
+"SetTransType(CardEntry.""Transaction Type""::""Void Offline"");"										
+ELSE										
+ERROR(Text006);										
+END;										
+SetAmount(OrgCardEntry.Amount);										
+SetSlipNo(SlipNo);										
+SetFromMSR(FALSE);										
+"//SetCardNo(OrgCardEntry.""Card Number"");"										
+SetCardNo(OrgCardEntry.GetCardNo);										
+"SetExpiryDate(OrgCardEntry.""Expiry Date"");"										
+SeekAuth;										
+PollStatus(MsgTxt);										
+IF GetResult <> 1 THEN										
+ERROR(Text007+MsgTxt);										
+InitLogEntry;										
+InsertLogEntry;										
+"CardEntry.""Authorisation Ok"" := TRUE;"										
+"CardEntry.""Receipt No."" := SlipNo;"										
+"CardEntry.""Tender Type"" := OrgCardEntry.""Tender Type"";"										
+"CardEntry.""Voided Slip No."" := OrgCardEntry.""Receipt No."";"										
+"CardEntry.""Voided Entry No."" := OrgCardEntry.""Entry No."";"										
+"IF CardEntry.""EFT Trans. No."" <> OrgCardEntry.""EFT Trans. No."" THEN"										
+"CardEntry.""Voided EFT Trans. No."" := OrgCardEntry.""EFT Trans. No."";"										
+CardEntry.MODIFY;										
+										
+OrgCardEntry.Voided := TRUE;										
+"OrgCardEntry.""Voided Slip No."" := '';"										
+"OrgCardEntry.""Voided Entry No."" := 0;"										
+OrgCardEntry.MODIFY;										
+COMMIT;										
+"EXIT(CardEntry.""Entry No."");"										
+END;										
+										
+PROCEDURE ZeroPad@20(val@1000 : Integer;len@1001 : Integer) : Text[30];										
+VAR										
+tmpStr@1002 : Text[30];										
+i@1003 : Integer;										
+BEGIN										
+//ZeroPad										
+tmpStr := FORMAT(val);										
+FOR i := 1 TO len - STRLEN(tmpStr) DO										
+tmpStr := '0' + tmpStr;										
+EXIT(tmpStr);										
+END;										
+										
+PROCEDURE DummyRequest@61();										
+VAR										
+DemoEFTPage@1100409000 : Page 99008966;										
+BEGIN										
+//Request										
+										
+//LS7.1-02-										
+EFTResult := 0;										
+EFTMessage := Text011;  // Rejected (DEMO)										
+DemoEFTPage.SetCardInfo(EFTCardNumber);										
+DemoEFTPage.RUNMODAL;										
+IF DemoEFTPage.GetResult = 1 THEN BEGIN										
+EFTResult := 1;										
+EFTMessage := Text013;  // Accepted (DEMO)										
+END;										
+										
+{										
+"IF NOT PosConfirm(Text012,FALSE) THEN BEGIN"										
+										
+EFTResult := 0;  // Rejected										
+EFTMessage := Text011;  // Rejected (DEMO)										
+END										
+ELSE BEGIN										
+EFTResult := 1;  // Accepted										
+EFTMessage := Text013;  // Accepted (DEMO)										
+END;										
+}										
+//LS7.1-02+										
+										
+EFTCardType := '1';										
+EFTCardTypeName := Text009;										
+EFTAuthCode := Text010;										
+SLEEP(1000);										
+END;										
+										
+PROCEDURE TestRequest@62();										
+BEGIN										
+//TestRequest										
+EFTResult := 1;										
+EFTCardType := '1';										
+EFTCardTypeName := Text009;										
+END;										
+										
+PROCEDURE PosConfirm@1100409000(Txt@1000 : Text[250];YesDefault@1001 : Boolean) : Boolean;										
+VAR										
+OposUtil@1100409000 : Codeunit 99008910;										
+Ok@1003 : Boolean;										
+BEGIN										
+//PosConfirm										
+IF GUIALLOWED THEN										
+BEGIN										
+"Ok := POSGUI.PosConfirm(Txt, YesDefault);"										
+IF NOT ISSERVICETIER THEN										
+OposUtil.Beeper;										
+COMMIT;										
+END										
+ELSE										
+Ok := TRUE;										
+EXIT(Ok)										
+END;										
+										
+PROCEDURE NextDemoTransNo@1200070000() : Code[10];										
+VAR										
+tmpCardEntry@1200070000 : Record 99008987;										
+BEGIN										
+"tmpCardEntry.SETFILTER(""Auth.code"", 'DEMO');"										
+IF tmpCardEntry.FINDLAST() THEN										
+"EXIT( INCSTR(tmpCardEntry.""EFT Trans. No."") );"										
+EXIT('0000000000');										
+END;										
+										
+PROCEDURE InitLogEntry@10012001() : Integer;										
+BEGIN										
+"CardEntry.""Store No."" := PosTerminal.""Store No."";"										
+"CardEntry.""POS Terminal No."" := PosTerminal.""No."";"										
+"CardEntry.""Entry No."" := NextEntryNo;"										
+"CardEntry.""EFT POS Terminal No."" := PosTerminal.""EFT POS Terminal No."";"										
+"CardEntry.""EFT Store No."" := PosTerminal.""EFT Store No."";"										
+"CardEntry.""MSR input"" := ReadFromMSR;"										
+CardEntry.Date := TODAY;										
+CardEntry.Time := TIME;										
+CardEntry.SetCardNo(EFTCardNumber);										
+"CardEntry.""Expiry Date"" := EFTExpiryDate;"										
+"CardEntry.""Card Type Name"" := EFTCardTypeName;"										
+"CardEntry.""Card Type"" := EFTCardType;"										
+CardEntry.Amount := EFTAmount;										
+										
+CardEntry.INSERT(TRUE);										
+COMMIT;										
+"EXIT(CardEntry.""Entry No."");"										
+END;										
+										
+PROCEDURE SetLineNo@10012000(pLineNo@10012000 : Integer);										
+BEGIN										
+CurrLineNo := pLineNo;										
+END;										
+										
+BEGIN										
+{										
+"//*** Dummy card services, demonstration only."										
+										
+LS7.1-01 KG  #24870# 25.09.2013 - Parcal returns with corresponding parcial card payment										
+LS7.1-02 EMA #27167# 16.01.2014 - Use new EFT Demo Add-In										
+}										
+END.										
+}										
+}										
+										
